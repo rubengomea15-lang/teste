@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Interativo: Princípio FIFO em Sistemas Operacionais</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: The SPA uses a thematic, single-page layout with a top navigation bar for quick scrolling. The core of the app is a series of interactive simulations for FCFS Scheduling and Page Replacement, designed to make abstract OS concepts tangible. This structure was chosen to guide the user from the general concept to specific, interactive examples, which is more engaging for learning than a static report. -->
+    <!-- Visualization & Content Choices: FCFS Scheduling -> Goal: Demonstrate inefficiency -> Viz: Interactive DOM simulation of a process queue and CPU -> Interaction: User starts/resets simulation to see the 'Convoy Effect' in real-time. Page Replacement -> Goal: Illustrate the algorithm -> Viz: DOM simulation of memory frames -> Interaction: User steps through page requests to see which page is evicted. I/O Buffers -> Goal: Inform -> Viz: Animated diagram of a data pipe. Justification: These interactive visualizations are more effective for teaching algorithms than static charts or text. Method: Vanilla JavaScript for DOM manipulation. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f5f5f4; /* stone-100 */
+            color: #292524; /* stone-800 */
+        }
+        .nav-button {
+            transition: all 0.2s ease-in-out;
+        }
+        .nav-button:hover, .nav-button.active {
+            background-color: #14b8a6; /* teal-500 */
+            color: white;
+        }
+        .process-bar {
+            transition: width 0.5s ease-in-out;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out forwards;
+        }
+        .fade-out {
+            animation: fadeOut 0.5s ease-in-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+        .simulation-container {
+            min-height: 400px;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white shadow-md sticky top-0 z-10">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <h1 class="text-xl sm:text-2xl font-bold text-teal-600">💡 Painel FIFO</h1>
+                <nav class="hidden md:flex items-center space-x-2">
+                    <button onclick="scrollToSection('section-overview')" class="nav-button px-3 py-2 rounded-md text-sm font-medium">Visão Geral</button>
+                    <button onclick="scrollToSection('section-fcfs')" class="nav-button px-3 py-2 rounded-md text-sm font-medium">Escalonamento FCFS</button>
+                    <button onclick="scrollToSection('section-memory')" class="nav-button px-3 py-2 rounded-md text-sm font-medium">Gerenciamento de Memória</button>
+                    <button onclick="scrollToSection('section-io')" class="nav-button px-3 py-2 rounded-md text-sm font-medium">Buffers de I/O</button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <section id="section-overview" class="mb-12">
+            <h2 class="text-3xl font-bold mb-4">O Princípio "Primeiro a Entrar, Primeiro a Sair" (PEPS)</h2>
+            <div class="grid md:grid-cols-2 gap-8 items-center">
+                <div class="space-y-4">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-2">1. Conceito Fundamental</h3>
+                        <p class="mb-2"><strong>Definição:</strong> FIFO é a forma mais básica e justa de gerenciamento de recursos, onde a ordem de processamento é estritamente <strong>cronológica</strong>.</p>
+                        <p><strong>Função Essencial:</strong> Manter a <strong>integridade da ordem</strong> em que os dados ou requisições chegam ao sistema.</p>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-2">Aplicações Chave</h3>
+                        <ul class="list-disc list-inside space-y-1">
+                           <li>Escalonamento de Processos (FCFS)</li>
+                           <li>Gerenciamento de Memória</li>
+                           <li>Buffers de Entrada e Saída (I/O)</li>
+                           <li>Comunicação entre Processos (IPC)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md flex flex-col items-center justify-center min-h-[300px]">
+                    <h3 class="text-lg font-semibold mb-4 text-center">Analogia Visual: Uma Fila de Espera</h3>
+                    <div id="queue-analogy" class="flex items-center space-x-2 h-16 overflow-hidden">
+                    </div>
+                    <button id="analogy-btn" class="mt-4 bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition">Adicionar à Fila</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="section-fcfs" class="mb-12">
+            <h2 class="text-3xl font-bold mb-2">2. Simulação: Escalonamento de Processos (FCFS)</h2>
+            <p class="text-stone-600 mb-6 max-w-3xl">Esta simulação interativa demonstra o algoritmo FCFS (*First-Come, First-Served*). Adicione processos com diferentes "tempos de execução" e inicie a simulação para observar como a CPU os processa na ordem de chegada. Preste atenção especial ao "Efeito da Testa de Fila", onde um processo longo no início atrasa todos os outros.</p>
+            
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="flex flex-wrap gap-4 mb-6">
+                    <button id="add-process-btn" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition">Adicionar Processo</button>
+                    <button id="start-fcfs-btn" class="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition">Iniciar Simulação</button>
+                    <button id="reset-fcfs-btn" class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition">Resetar</button>
+                </div>
+
+                <div class="grid md:grid-cols-3 gap-6 simulation-container">
+                    <div class="md:col-span-2">
+                        <h3 class="font-semibold text-lg mb-2">Fila de Processos Prontos</h3>
+                        <div id="ready-queue" class="bg-stone-100 p-4 rounded-md min-h-[150px] space-y-2"></div>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-lg mb-2">CPU</h3>
+                        <div id="cpu-box" class="bg-stone-100 p-4 rounded-md min-h-[150px] flex items-center justify-center">
+                           <span class="text-stone-400">Ociosa</span>
+                        </div>
+                    </div>
+                </div>
+                 <div id="fcfs-summary" class="mt-6 p-4 bg-amber-50 rounded-md border border-amber-200 hidden"></div>
+            </div>
+        </section>
+
+        <section id="section-memory" class="mb-12">
+            <h2 class="text-3xl font-bold mb-2">3. Simulação: Gerenciamento de Memória</h2>
+            <p class="text-stone-600 mb-6 max-w-3xl">Esta simulação demonstra como o algoritmo FIFO funciona para a substituição de páginas na memória. A memória tem um número limitado de "frames". Quando a memória está cheia e uma nova página é solicitada, a página que está na memória há mais tempo (a mais antiga) é removida.</p>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                 <div class="flex flex-wrap gap-4 mb-6">
+                     <button id="request-page-btn" class="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition">Solicitar Próxima Página</button>
+                     <button id="reset-memory-btn" class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition">Resetar</button>
+                </div>
+                
+                <div class="grid md:grid-cols-3 gap-6 simulation-container">
+                    <div>
+                        <h3 class="font-semibold text-lg mb-2">Páginas Solicitadas</h3>
+                        <div id="page-requests" class="bg-stone-100 p-4 rounded-md space-y-1"></div>
+                    </div>
+                    <div class="md:col-span-2">
+                         <h3 class="font-semibold text-lg mb-2">Frames de Memória (Tamanho: 4)</h3>
+                         <div id="memory-frames" class="grid grid-cols-2 sm:grid-cols-4 gap-4"></div>
+                    </div>
+                </div>
+                 <div id="memory-summary" class="mt-6 p-4 bg-blue-50 rounded-md border border-blue-200"></div>
+            </div>
+        </section>
+        
+        <section id="section-io" class="mb-12">
+            <h2 class="text-3xl font-bold mb-2">4. Buffers de I/O e Comunicação (IPC)</h2>
+            <p class="text-stone-600 mb-6 max-w-3xl">O FIFO é crucial para garantir que os dados sejam processados na ordem correta em operações de entrada/saída e na comunicação entre processos. Esta visualização mostra como pacotes de dados passam por um buffer, mantendo sua sequência original.</p>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                 <div class="flex flex-wrap gap-4 mb-6">
+                    <button id="send-packet-btn" class="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 transition">Enviar Pacote</button>
+                 </div>
+
+                 <div class="flex flex-col items-center justify-center p-4">
+                     <div class="flex items-center w-full max-w-2xl">
+                         <div class="text-center font-semibold">Entrada</div>
+                         <div class="flex-grow mx-4 h-16 bg-stone-200 rounded-full flex items-center px-4" id="io-buffer">
+                         </div>
+                         <div class="text-center font-semibold">Saída</div>
+                     </div>
+                 </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        function scrollToSection(sectionId) {
+            document.getElementById(sectionId).scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // --- Analogy Simulation ---
+        const analogyQueue = document.getElementById('queue-analogy');
+        const analogyBtn = document.getElementById('analogy-btn');
+        let personCount = 0;
+        analogyBtn.addEventListener('click', () => {
+            personCount++;
+            const person = document.createElement('div');
+            person.className = 'w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold fade-in';
+            person.textContent = `P${personCount}`;
+            analogyQueue.appendChild(person);
+
+            if (analogyQueue.children.length > 5) {
+                const firstPerson = analogyQueue.children[0];
+                firstPerson.classList.remove('fade-in');
+                firstPerson.classList.add('fade-out');
+                setTimeout(() => firstPerson.remove(), 500);
+            }
+        });
+
+        // --- FCFS Simulation ---
+        const addProcessBtn = document.getElementById('add-process-btn');
+        const startFcfsBtn = document.getElementById('start-fcfs-btn');
+        const resetFcfsBtn = document.getElementById('reset-fcfs-btn');
+        const readyQueueEl = document.getElementById('ready-queue');
+        const cpuBoxEl = document.getElementById('cpu-box');
+        const fcfsSummaryEl = document.getElementById('fcfs-summary');
+
+        let processId = 0;
+        let readyQueue = [];
+        let simulationRunning = false;
+        
+        const processColors = ['bg-sky-400', 'bg-indigo-400', 'bg-emerald-400', 'bg-rose-400', 'bg-amber-400'];
+
+        function createProcessElement(process) {
+            const el = document.createElement('div');
+            el.id = `proc-${process.id}`;
+            el.className = 'p-3 rounded-md text-white shadow-sm flex justify-between items-center';
+            el.style.backgroundColor = process.color.replace('bg-', '').replace('-400', '');
+            el.innerHTML = `
+                <span class="font-semibold">Processo ${process.id}</span>
+                <div class="w-24 h-4 bg-white/30 rounded-full">
+                    <div id="progress-${process.id}" class="h-4 ${process.color} rounded-full process-bar" style="width: 0%;"></div>
+                </div>
+            `;
+            return el;
+        }
+
+        function renderReadyQueue() {
+            readyQueueEl.innerHTML = '';
+            readyQueue.forEach(p => {
+                const el = createProcessElement(p);
+                const progress = el.querySelector(`#progress-${p.id}`);
+                progress.style.width = '0%';
+                readyQueueEl.appendChild(el);
+            });
+             if(readyQueue.length === 0) {
+                readyQueueEl.innerHTML = '<span class="text-stone-400">Fila vazia. Adicione processos.</span>'
+            }
+        }
+
+        addProcessBtn.addEventListener('click', () => {
+            if (simulationRunning) return;
+            processId++;
+            const burstTime = Math.floor(Math.random() * 8) + 2; // Burst time between 2 and 9
+            readyQueue.push({ 
+                id: processId, 
+                burst: burstTime, 
+                remaining: burstTime,
+                color: processColors[processId % processColors.length]
+            });
+            renderReadyQueue();
+        });
+
+        resetFcfsBtn.addEventListener('click', () => {
+            simulationRunning = false;
+            processId = 0;
+            readyQueue = [];
+            renderReadyQueue();
+            cpuBoxEl.innerHTML = '<span class="text-stone-400">Ociosa</span>';
+            fcfsSummaryEl.classList.add('hidden');
+        });
+        
+        startFcfsBtn.addEventListener('click', async () => {
+            if (simulationRunning || readyQueue.length === 0) return;
+            simulationRunning = true;
+            addProcessBtn.disabled = true;
+            startFcfsBtn.disabled = true;
+
+            let totalWaitTime = 0;
+            let currentTime = 0;
+
+            for (const process of readyQueue) {
+                const processElInQueue = document.getElementById(`proc-${process.id}`);
+                if (processElInQueue) processElInQueue.remove();
+                
+                const processElInCpu = createProcessElement(process);
+                cpuBoxEl.innerHTML = '';
+                cpuBoxEl.appendChild(processElInCpu);
+
+                totalWaitTime += currentTime;
+
+                const progressBar = document.getElementById(`progress-${process.id}`);
+                
+                let interval = setInterval(() => {
+                    process.remaining--;
+                    const progress = ((process.burst - process.remaining) / process.burst) * 100;
+                    progressBar.style.width = `${progress}%`;
+
+                    if (process.remaining <= 0) {
+                        clearInterval(interval);
+                        currentTime += process.burst;
+                        cpuBoxEl.innerHTML = '<span class="text-stone-400">Ociosa</span>';
+                    }
+                }, 300);
+                
+                await new Promise(resolve => setTimeout(resolve, process.burst * 300 + 100));
+            }
+            
+            const avgWaitTime = totalWaitTime / readyQueue.length;
+            fcfsSummaryEl.innerHTML = `<strong>Simulação Concluída!</strong><br>
+            Tempo total de espera: ${totalWaitTime} unidades.<br>
+            Tempo médio de espera: ${avgWaitTime.toFixed(2)} unidades.
+            <p class="mt-2 text-sm text-amber-700">Observe como o tempo de espera pode ser alto se um processo longo (como o P1) estiver no início da fila - o <strong>Efeito da Testa de Fila</strong>.</p>`;
+            fcfsSummaryEl.classList.remove('hidden');
+
+            simulationRunning = false;
+            addProcessBtn.disabled = false;
+            startFcfsBtn.disabled = false;
+        });
+
+        // --- Memory Management Simulation ---
+        const requestPageBtn = document.getElementById('request-page-btn');
+        const resetMemoryBtn = document.getElementById('reset-memory-btn');
+        const pageRequestsEl = document.getElementById('page-requests');
+        const memoryFramesEl = document.getElementById('memory-frames');
+        const memorySummaryEl = document.getElementById('memory-summary');
+
+        const MEMORY_SIZE = 4;
+        let pageRequestSequence = [];
+        let memoryFrames = [];
+        let memoryQueue = [];
+        let currentRequestIndex = 0;
+        let pageFaults = 0;
+        let pageHits = 0;
+
+        function generatePageRequests() {
+            pageRequestSequence = [];
+            for (let i = 0; i < 15; i++) {
+                pageRequestSequence.push(Math.floor(Math.random() * 10));
+            }
+        }
+
+        function renderMemory() {
+            pageRequestsEl.innerHTML = pageRequestSequence.map((page, index) => 
+                `<div class="p-1 rounded text-center ${index === currentRequestIndex - 1 ? 'bg-teal-500 text-white font-bold' : 'bg-white'}">${page}</div>`
+            ).join('');
+
+            memoryFramesEl.innerHTML = '';
+            for (let i = 0; i < MEMORY_SIZE; i++) {
+                const page = memoryFrames[i];
+                const isOldest = page && memoryQueue.length > 0 && page === memoryQueue[0];
+                memoryFramesEl.innerHTML += `
+                    <div class="h-24 rounded-md border-2 flex items-center justify-center text-2xl font-bold
+                        ${page !== undefined ? 'bg-blue-200 border-blue-400' : 'bg-stone-100 border-dashed'}
+                        ${isOldest ? 'ring-4 ring-red-500' : ''}">
+                        ${page !== undefined ? page : ''}
+                    </div>
+                `;
+            }
+            memorySummaryEl.innerHTML = `<strong>Faltas de Página:</strong> ${pageFaults} | <strong>Acertos (Hits):</strong> ${pageHits}`;
+        }
+        
+        function resetMemorySimulation() {
+            generatePageRequests();
+            memoryFrames = new Array(MEMORY_SIZE).fill(undefined);
+            memoryQueue = [];
+            currentRequestIndex = 0;
+            pageFaults = 0;
+            pageHits = 0;
+            requestPageBtn.disabled = false;
+            renderMemory();
+        }
+
+        requestPageBtn.addEventListener('click', () => {
+            if (currentRequestIndex >= pageRequestSequence.length) {
+                requestPageBtn.disabled = true;
+                return;
+            };
+
+            const page = pageRequestSequence[currentRequestIndex];
+            currentRequestIndex++;
+
+            if (memoryFrames.includes(page)) {
+                // Page Hit
+                pageHits++;
+            } else {
+                // Page Fault
+                pageFaults++;
+                if (memoryFrames.includes(undefined)) {
+                    // Memory has free space
+                    const freeIndex = memoryFrames.indexOf(undefined);
+                    memoryFrames[freeIndex] = page;
+                    memoryQueue.push(page);
+                } else {
+                    // Memory is full, apply FIFO
+                    const pageToReplace = memoryQueue.shift();
+                    const replaceIndex = memoryFrames.indexOf(pageToReplace);
+                    memoryFrames[replaceIndex] = page;
+                    memoryQueue.push(page);
+                }
+            }
+            renderMemory();
+        });
+        
+        resetMemoryBtn.addEventListener('click', resetMemorySimulation);
+
+        // --- I/O Buffer Simulation ---
+        const sendPacketBtn = document.getElementById('send-packet-btn');
+        const ioBufferEl = document.getElementById('io-buffer');
+        let packetId = 0;
+
+        sendPacketBtn.addEventListener('click', () => {
+            packetId++;
+            const packet = document.createElement('div');
+            packet.className = 'w-12 h-12 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold flex-shrink-0 mx-1 transition-transform duration-500';
+            packet.textContent = `D${packetId}`;
+            
+            ioBufferEl.appendChild(packet);
+            
+            setTimeout(() => {
+                if (ioBufferEl.children.length > 0) {
+                     const firstPacket = ioBufferEl.children[0];
+                     firstPacket.style.transform = 'translateX(-200px)';
+                     firstPacket.style.opacity = '0';
+                     setTimeout(() => firstPacket.remove(), 500);
+                }
+            }, 1000);
+        });
+        
+        // --- Initial State ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderReadyQueue();
+            resetMemorySimulation();
+        });
+    </script>
+</body>
+</html>
